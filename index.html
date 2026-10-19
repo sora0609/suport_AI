@@ -319,6 +319,21 @@ th{color:var(--muted);font-weight:500;font-size:12px}
     const cm=$("#cm"),cs=$("#cs");if(cm){cm.value=String(Math.min(60,Math.floor(n/60)));cs.value=String(Math.floor((n%60)/5)*5)}
     updateClock();
   }
+  function sttRow(){
+    const box=el("div",{style:"display:flex;flex-direction:column;gap:8px"});
+    if(!SRC){
+      box.append(el("div",{class:"lbl",text:"文字起こし"}),el("p",{class:"hint",style:"margin:0",text:"この端末・ブラウザでは自動の文字起こしは使えません。下の欄をタップして、キーボードのマイクで入力できます。"}));
+      return box;
+    }
+    const draw=()=>{[...row.children].forEach(b=>b.setAttribute("aria-pressed",String((b.dataset.v==="1")===sttPref())))};
+    const row=el("div",{class:"row",style:"gap:6px"},
+      ...[["0","オフ"],["1","オン"]].map(([v,t])=>el("button",{class:"seg wide","data-v":v,"aria-pressed":"false",onclick:()=>{if(S.timer.state==="running")return;sttSetPref(v==="1");draw()}},t)));
+    draw();
+    box.append(el("div",{class:"lbl",text:"文字起こし(スタートと同時に始まります)"}),row,
+      el("p",{class:"hint",style:"margin:0",text:"オンにすると、話した音声がブラウザの音声認識サービス(GoogleやAppleなど)に送られて文字になります。音声は保存されません。オフのままでも練習できます。"}),
+      el("div",{class:"hint",id:"sttstat",style:"margin:0"}));
+    return box;
+  }
   function customRow(){
     const mk=(id,max,step)=>{const x=el("select",{id,style:"height:40px;font:inherit;padding:0 8px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)"});for(let v=0;v<=max;v+=step)x.append(el("option",{value:String(v),text:String(v)}));return x};
     const m=mk("cm",60,1),sec=mk("cs",55,5);
@@ -352,6 +367,7 @@ th{color:var(--muted);font-weight:500;font-size:12px}
       el("div",{class:"lbl",text:"話す時間"}),
       el("div",{class:"row",id:"times",style:"gap:6px"},[30,60,120,180].map(n=>el("button",{class:"seg wide","data-s":String(n),"aria-pressed":String(S.total===n),onclick:()=>setTime(n)},n<60?n+"秒":(n/60)+"分"))),
       customRow(),
+      sttRow(),
       el("div",{class:"lbl",text:"始める前の気持ち(1 平気 〜 5 とても気が重い)"}),
       scale(()=>S.moodBefore,v=>{S.moodBefore=v;const m=$("#mbmsg");if(m)m.style.display="none"},"mb"),
       el("div",{class:"warn",id:"mbmsg",style:"display:none",text:"始める前の気持ちを1〜5から選ぶと、先に進めます。"}),
@@ -373,15 +389,46 @@ th{color:var(--muted);font-weight:500;font-size:12px}
     if(S.moodBefore==null){const m=$("#mbmsg");if(m){m.style.display="";m.scrollIntoView({block:"center"})}return}
     stopTimer();
     S.timer={state:"running",left:S.total,t0:performance.now(),id:0};
+    startSTT();
     S.timer.id=setInterval(()=>{
       const left=S.total-(performance.now()-S.timer.t0)/1000;
-      if(left<=0){S.timer.left=0;S.timer.state="done";clearInterval(S.timer.id);try{navigator.vibrate&&navigator.vibrate(200)}catch(e){}}
+      if(left<=0){S.timer.left=0;S.timer.state="done";clearInterval(S.timer.id);stopSTT();try{navigator.vibrate&&navigator.vibrate(200)}catch(e){}}
       else S.timer.left=left;
       updateClock();
     },200);
     updateClock();
   }
-  function stopTimer(){if(S.timer.id)clearInterval(S.timer.id);S.timer.id=0;if(S.timer.state==="running")S.timer.state="idle"}
+  /* ---------- speech-to-text (optional, off by default) ---------- */
+  const SRC=window.SpeechRecognition||window.webkitSpeechRecognition;
+  const STT_KEY="presen_stt_on";
+  const sttPref=()=>{try{return localStorage.getItem(STT_KEY)==="1"}catch(e){return false}};
+  const sttSetPref=v=>{try{localStorage.setItem(STT_KEY,v?"1":"0")}catch(e){}};
+  let stt={rec:null,run:false,base:"",fin:""};
+  function sttStatus(t){const e=$("#sttstat");if(e)e.textContent=t}
+  function sttPut(interim){
+    const ta=$("#spoken");const v=(stt.base+stt.fin+(interim||""));
+    S.spoken=v;if(ta)ta.value=v;
+  }
+  function startSTT(){
+    if(!SRC||!sttPref())return;
+    stopSTT();
+    const ta=$("#spoken");stt.base=ta&&ta.value?ta.value.replace(/\s*$/,"")+"\n":"";stt.fin="";stt.run=true;
+    const mk=()=>{
+      const r=new SRC();r.lang="ja-JP";r.continuous=true;r.interimResults=true;
+      r.onresult=e=>{let it="";for(let i=e.resultIndex;i<e.results.length;i++){const t=e.results[i][0].transcript;if(e.results[i].isFinal)stt.fin+=t;else it+=t}sttPut(it)};
+      r.onerror=e=>{if(e.error==="not-allowed"||e.error==="service-not-allowed"){stt.run=false;sttStatus("マイクが許可されていないため、文字起こしは使えません。キーボードのマイクで入力できます。")}};
+      r.onend=()=>{if(stt.run){try{r.start()}catch(e){}}else sttStatus("")};
+      stt.rec=r;try{r.start();sttStatus("文字起こし中…")}catch(e){stt.run=false}
+    };
+    mk();
+  }
+  function stopSTT(){
+    const was=stt.run;stt.run=false;
+    if(stt.rec){try{stt.rec.stop()}catch(e){}stt.rec=null}
+    if(was)sttPut("");
+    sttStatus("");
+  }
+  function stopTimer(){stopSTT();if(S.timer.id)clearInterval(S.timer.id);S.timer.id=0;if(S.timer.state==="running")S.timer.state="idle"}
 
   function lcsSpan(text,pt){
     let best=0,end=0;const n=text.length,m=pt.length;let prev=new Array(m+1).fill(0);
