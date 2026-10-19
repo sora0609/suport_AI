@@ -55,6 +55,8 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--in
 input[type=text],textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%;box-sizing:border-box;min-width:0}
 textarea{resize:vertical;min-height:84px}
 .hint{font-size:13px;color:var(--ink2)}
+.howto{background:var(--accent-soft);border-radius:12px;padding:12px 14px;font-size:13px;color:var(--ink);display:flex;flex-direction:column;gap:4px}
+.howto ol{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:2px}
 .ring{position:relative;width:200px;height:200px;margin:4px auto}
 .ring svg{width:100%;height:100%;transform:rotate(-90deg)}
 .ring .num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:var(--mono);font-size:44px;font-weight:500;font-variant-numeric:tabular-nums}
@@ -90,8 +92,6 @@ th{color:var(--muted);font-weight:500;font-size:12px}
 @media (prefers-reduced-motion: no-preference){.ring circle.fg{transition:stroke-dashoffset .25s linear}}
 </style>
 
-</head>
-<body>
 <div class="wrap">
   <div class="top">
     <h1>1分プレゼン練習</h1>
@@ -184,7 +184,7 @@ th{color:var(--muted);font-weight:500;font-size:12px}
   /* ---------- stages ---------- */
   function setStep(n){S.step=n;renderPractice()}
   function renderSteps(){
-    [...$("#steps").children].forEach((li,i)=>{li.className=i<S.step?"done":i===S.step?"now":"";if(i===S.step)li.setAttribute("aria-current","step");else li.removeAttribute("aria-current")});
+    [...$("#steps").children].forEach((li,i)=>{li.className=i<S.step?"done":i===S.step?"now":"";if(i===S.step)li.setAttribute("aria-current","step");else li.removeAttribute("aria-current");if(i<S.step){li.style.cursor="pointer";li.setAttribute("role","button");li.tabIndex=0;li.onclick=()=>{stopTimer();setStep(i)};li.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();li.onclick()}}}else{li.style.cursor="";li.removeAttribute("role");li.removeAttribute("tabindex");li.onclick=null;li.onkeydown=null}});
   }
   function renderPractice(){
     renderSteps();
@@ -197,7 +197,15 @@ th{color:var(--muted);font-weight:500;font-size:12px}
     own.addEventListener("input",()=>{if(own.value.trim()){S.topic=own.value.trim();$("#topic-text").textContent=S.topic}});
     const ownWho=el("input",{type:"text",id:"own-who",placeholder:"自分で聞き手を決める場合はここに入力(例:隣の席の人)",value:"",autocomplete:"off"});
     ownWho.addEventListener("input",()=>{const v=ownWho.value.trim();if(v){S.listener={name:v,desc:"前提知識はない。話は最後まで聞く"};$("#who").replaceChildren(el("b",{text:S.listener.name}),el("span",{text:S.listener.desc}))}});
-    st.append(el("p",{class:"hint",text:NOAI?"1分で終わります。録画はしません。お題を引いて、要点を決めて、1分話して、言えた要点を確認するだけです。":"1分で終わります。録画はしません。話した内容を文字で入れると、聞き手役のAIが反応を返します。"}));
+    st.append(el("div",{class:"howto"},
+      el("b",{text:"使い方"}),
+      el("ol",{},
+        el("li",{text:"お題と聞き手を決める"}),
+        el("li",{text:"伝えたい要点を3つ書く"}),
+        el("li",{text:"画面を見ずに話す(本番と同じ状態で言えるか確かめるため、要点は表示されません)"}),
+        el("li",{text:"言えた要点をタップして、記録して終わる(記録データは残り、継続日数・達成率が表示されます)"})
+      )
+    ));
     st.append(el("div",{class:"panel"},
       el("div",{class:"lbl",text:"お題"}),
       el("div",{class:"topic",id:"topic-text",text:S.topic}),
@@ -237,7 +245,27 @@ th{color:var(--muted);font-weight:500;font-size:12px}
     if(S.timer.state==="running")return;
     S.total=n;S.timer={state:"idle",left:n,t0:0,id:0};
     [...document.querySelectorAll("#times button")].forEach(b=>b.setAttribute("aria-pressed",String(+b.dataset.s===n)));
+    const cm=$("#cm"),cs=$("#cs");if(cm){cm.value=String(Math.min(60,Math.floor(n/60)));cs.value=String(Math.floor((n%60)/5)*5)}
     updateClock();
+  }
+  function customRow(){
+    const mk=(id,max,step)=>{const x=el("select",{id,style:"height:40px;font:inherit;padding:0 8px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)"});for(let v=0;v<=max;v+=step)x.append(el("option",{value:String(v),text:String(v)}));return x};
+    const m=mk("cm",60,1),sec=mk("cs",55,5);
+    const sync=()=>{m.value=String(Math.min(60,Math.floor(S.total/60)));sec.value=String(Math.floor((S.total%60)/5)*5)};
+    sync();
+    const msg=el("span",{class:"hint",id:"cmsg"});
+    const set=()=>{
+      if(S.timer.state==="running"){sync();return}
+      const n=(+m.value)*60+(+sec.value);
+      if(n<10){msg.textContent="10秒以上にしてください";sync();return}
+      if(n>3600){msg.textContent="60分までです";sec.value="0";return}
+      msg.textContent="";setTime(n);
+    };
+    m.addEventListener("change",set);sec.addEventListener("change",set);
+    return el("div",{},
+      el("div",{class:"lbl",text:"長めに練習したい人は時間を自分で選ぶ(10秒〜60分)"}),
+      el("div",{class:"row",style:"gap:6px;align-items:center"},m,el("span",{text:"分"}),sec,el("span",{text:"秒"})),
+      msg);
   }
   function stageTalk(st){
     const ring=el("div",{class:"ring"});
@@ -249,12 +277,15 @@ th{color:var(--muted);font-weight:500;font-size:12px}
     st.append(el("div",{class:"panel"},
       el("div",{class:"lbl",text:"お題"}),el("div",{style:"font-weight:700",text:S.topic}),
       el("p",{class:"hint",text:"聞き手:"+S.listener.name+"。"+S.listener.desc}),
+      el("p",{class:"hint",text:"要点は表示されません。本番と同じ状態で、言えるかを確かめます。"}),
       el("div",{class:"lbl",text:"話す時間"}),
       el("div",{class:"row",id:"times",style:"gap:6px"},[30,60,120,180].map(n=>el("button",{class:"seg wide","data-s":String(n),"aria-pressed":String(S.total===n),onclick:()=>setTime(n)},n<60?n+"秒":(n/60)+"分"))),
+      customRow(),
       el("div",{class:"lbl",text:"始める前の気持ち(1 平気 〜 5 とても気が重い)"}),
       scale(()=>S.moodBefore,v=>{S.moodBefore=v},"mb"),
       ring,
       el("div",{class:"row"},startBtn,endBtn),
+      el("div",{class:"row"},el("button",{class:"btn small",onclick:()=>{stopTimer();setStep(1)}},"← 要点を直しに戻る")),
       NOAI?null:el("label",{class:"f",for:"spoken"},"話した内容(任意。入れると聞き手AIが反応します)",ta)
     ));
     updateClock();
@@ -305,7 +336,18 @@ th{color:var(--muted);font-weight:500;font-size:12px}
         el("button",{class:"btn",onclick:()=>{S.checks=[false,false,false];S.ai=null;S.aiErr="";S.spoken="";S.timer={state:"idle",left:S.total,t0:0,id:0};setStep(2)}},"もう一度話す"),
         el("button",{class:"btn primary grow",id:"savebtn",onclick:doSave},"記録して終わる")
       ));
-    st.append(wrap,save);
+    const cc0=S.conclusion.trim()||("「"+S.topic+"」について話します");const cc=cc0.replace(/[。.]+$/,"")+"。";
+    const ord=["1つ目","2つ目","3つ目"];
+    const ex=el("div",{class:"panel"},
+      el("div",{class:"lbl",text:"要点のつなぎ方の例"}),
+      el("p",{class:"hint",text:"あなたの要点を型にはめた例です。そのまま言う必要はありません。"}),
+      el("div",{style:"background:var(--accent-soft);border-radius:12px;padding:12px 14px;line-height:1.9;font-size:15px"},
+        el("div",{},el("b",{text:"結論:"}),cc),
+        el("div",{},el("b",{text:"理由は"+pts.length+"つあります。"})),
+        ...pts.map(({p},k)=>el("div",{},el("b",{text:ord[k]}),"、"+p.replace(/[。.]+$/,"")+"。")),
+        el("div",{},el("b",{text:"まとめ:"}),"だから、"+cc)),
+      el("p",{class:"hint",text:"入力した言葉をそのまま並べた例です。言い回しは自分で直してください。"}));
+    st.append(wrap,ex,save);
     renderAi();updateRates();
   }
   function selfRate(){const p=filled();if(!p.length)return null;return p.filter(x=>S.checks[x.i]).length/p.length}
@@ -445,43 +487,5 @@ JSONだけを返してください:
 })();
 </script>
 
-<!-- Code injected by live-server -->
-<script>
-	// <![CDATA[  <-- For SVG support
-	if ('WebSocket' in window) {
-		(function () {
-			function refreshCSS() {
-				var sheets = [].slice.call(document.getElementsByTagName("link"));
-				var head = document.getElementsByTagName("head")[0];
-				for (var i = 0; i < sheets.length; ++i) {
-					var elem = sheets[i];
-					var parent = elem.parentElement || head;
-					parent.removeChild(elem);
-					var rel = elem.rel;
-					if (elem.href && typeof rel != "string" || rel.length == 0 || rel.toLowerCase() == "stylesheet") {
-						var url = elem.href.replace(/(&|\?)_cacheOverride=\d+/, '');
-						elem.href = url + (url.indexOf('?') >= 0 ? '&' : '?') + '_cacheOverride=' + (new Date().valueOf());
-					}
-					parent.appendChild(elem);
-				}
-			}
-			var protocol = window.location.protocol === 'http:' ? 'ws://' : 'wss://';
-			var address = protocol + window.location.host + window.location.pathname + '/ws';
-			var socket = new WebSocket(address);
-			socket.onmessage = function (msg) {
-				if (msg.data == 'reload') window.location.reload();
-				else if (msg.data == 'refreshcss') refreshCSS();
-			};
-			if (sessionStorage && !sessionStorage.getItem('IsThisFirstTime_Log_From_LiveServer')) {
-				console.log('Live reload enabled.');
-				sessionStorage.setItem('IsThisFirstTime_Log_From_LiveServer', true);
-			}
-		})();
-	}
-	else {
-		console.error('Upgrade your browser. This Browser is NOT supported WebSocket for Live-Reloading.');
-	}
-	// ]]>
-</script>
 </body>
 </html>
