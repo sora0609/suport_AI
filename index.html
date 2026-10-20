@@ -257,8 +257,8 @@ th{color:var(--muted);font-weight:500;font-size:12px}
       ev.forEach(({t,k},i)=>{
         const e=new Date(t.getTime()+10*60000);
         ics+="BEGIN:VEVENT\r\nUID:practice-"+dt.value+"-"+k+"-"+i+"@1min-practice\r\nDTSTAMP:"+stamp+"\r\nDTSTART:"+f(t)+"\r\nDTEND:"+f(e)+"\r\n"
-          +"SUMMARY:発表の練習(発表まであと"+k+"日)\r\nDESCRIPTION:1分だけ話してみよう。"+url()+"\r\nURL:"+url()+"\r\n"
-          +"BEGIN:VALARM\r\nTRIGGER:PT0M\r\nACTION:DISPLAY\r\nDESCRIPTION:発表の練習(あと"+k+"日)\r\nEND:VALARM\r\nEND:VEVENT\r\n";
+          +"SUMMARY:発表の練習(発表まであと"+k+"日)\r\nDESCRIPTION:1分だけ話してみよう。"+url()+"\r\nLOCATION:"+url()+"\r\nURL:"+url()+"\r\n"
+          +"BEGIN:VALARM\r\nTRIGGER:PT0M\r\nACTION:DISPLAY\r\nDESCRIPTION:発表の練習(あと"+k+"日) "+url()+"\r\nEND:VALARM\r\nEND:VEVENT\r\n";
       });
       ics+="END:VCALENDAR\r\n";
       const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([ics],{type:"text/calendar;charset=utf-8"}));a.download="発表練習リマインド.ics";document.body.appendChild(a);a.click();a.remove();
@@ -267,7 +267,7 @@ th{color:var(--muted);font-weight:500;font-size:12px}
     const google=(ev)=>{
       area.replaceChildren(...ev.map(({t,k,h})=>{
         const e=new Date(t.getTime()+10*60000);
-        const href="https://calendar.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent("発表の練習(発表まであと"+k+"日)")+"&dates="+f(t)+"/"+f(e)+"&details="+encodeURIComponent("1分だけ話してみよう。"+url());
+        const href="https://calendar.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent("発表の練習(発表まであと"+k+"日)")+"&dates="+f(t)+"/"+f(e)+"&details="+encodeURIComponent("1分だけ話してみよう。"+url())+"&location="+encodeURIComponent(url());
         return el("a",{class:"btn",href,target:"_blank",rel:"noopener",style:"text-decoration:none;text-align:center"},(t.getMonth()+1)+"/"+t.getDate()+" "+h+":00(あと"+k+"日)を追加");
       }));
       msg.textContent="押すとGoogleカレンダーが開きます。右下の「カレンダー」欄で追加先を選び、「保存」を押してください。"+ev.length+"件それぞれで行います。通知の時刻はカレンダーの標準設定になります。";
@@ -646,11 +646,12 @@ JSONだけを返してください:
     {step:0,title:"お題と聞き手が決まります",body:"お題と聞き手は自動で決まります。「引き直す」「聞き手を替える」で変えられ、自分で入力もできます。"},
     {step:1,title:"伝えたい要点を3つ書きます",body:"短い言葉で構いません(例が入っています)。本番では画面に表示されません。"},
     {step:2,title:"画面を見ずに話します",body:"始める前の気持ちを選び、時間を選んでスタートします。長い発表の練習は、時間を自分で選べます。文字起こしをオンにすると、話した内容が自動で文字になります(オフでも練習できます)。"},
-    {step:3,title:"言えた要点を確かめて記録します",body:"言えた要点をタップします。文字起こしを見ると、要点と同じ言葉に下線が付きます。要点のつなぎ方の例も出ます。最後に気持ちを選んで「記録して終わる」を押すと、記録が残ります。"}
+    {step:3,title:"言えた要点を確かめて記録します",body:"言えた要点をタップします。文字起こしを見ると、要点と同じ言葉に下線が付きます。要点のつなぎ方の例も出ます。最後に気持ちを選んで「記録して終わる」を押すと、記録が残ります。"},
+    {step:0,target:"#rd",title:"通知で続けやすくなります(任意)",body:"発表の予定がある人は、ここで発表日を選んで「カレンダーに追加する」を押すと、3日前〜前日にカレンダーの通知が届きます。通知をきっかけに練習を続けられます。"}
   ];
   function tourClose(){
     document.querySelectorAll(".tour-back,.tour-tip,.tour-welcome").forEach(x=>x.remove());
-    document.querySelectorAll(".tour-hl").forEach(x=>x.classList.remove("tour-hl"));
+    document.querySelectorAll(".tour-hl").forEach(x=>x.classList.remove("tour-hl"));document.body.style.paddingBottom="";
   }
   function tourEnd(){
     tourClose();tourMark();
@@ -667,9 +668,9 @@ JSONだけを返してください:
     if(i===3){S.checks=[true,true,false]}
     stopTimer();setStep(t.step);
     const back=el("div",{class:"tour-back"});
-    const tgt=document.querySelector("#stage .panel");
+    let tgt=document.querySelector("#stage .panel");if(t.target){const x=document.querySelector(t.target);if(x)tgt=x.closest(".panel")||x}
     document.body.append(back);
-    if(tgt){tgt.classList.add("tour-hl");tgt.scrollIntoView({block:"start"});window.scrollBy(0,-12)}
+    document.body.style.paddingBottom=t.target?"340px":"";if(tgt){tgt.classList.add("tour-hl");tgt.scrollIntoView({block:"start"});window.scrollBy(0,-12)}
     const last=i===TOUR_STEPS.length-1;
     document.body.append(el("div",{class:"tour-tip",role:"dialog"},
       el("div",{class:"tn",text:(i+1)+" / "+TOUR_STEPS.length}),el("b",{text:t.title}),el("p",{text:t.body}),
@@ -685,7 +686,7 @@ JSONだけを返してください:
   function tourWelcome(){
     document.body.append(el("div",{class:"tour-back"}),el("div",{class:"tour-welcome",role:"dialog"},
       el("b",{style:"font-size:17px",text:"はじめての人へ"}),
-      el("p",{text:"30秒で使い方を体験できます。実際の画面を見ながら、4つの手順を確認します。"}),
+      el("p",{text:"30秒で使い方を体験できます。実際の画面を見ながら、使い方を確認します。"}),
       el("button",{class:"btn primary",onclick:tourStart},"体験する(30秒)"),
       el("button",{class:"btn",onclick:()=>{tourClose();tourMark()}},"あとで・スキップ")));
   }
@@ -704,6 +705,7 @@ JSONだけを返してください:
   (async()=>{await initCaps();await loadHistory();if(!$("#view-log").hidden)renderLog();if(S.step===3)renderAi();if(!tourSeen())tourWelcome()})();
 })();
 </script>
+
 
 </body>
 </html>
